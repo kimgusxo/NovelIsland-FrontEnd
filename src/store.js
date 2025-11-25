@@ -3,7 +3,8 @@ import axios from 'axios'; // Axios를 import
 import router from './router';
 
 const axiosInstance = axios.create({
-  baseURL: 'https://novelisland.duckdns.org', // 이 부분에 API 서버의 주소와 포트를 설정하세요
+  // baseURL: 'https://novelisland.duckdns.org',  // 이 부분에 API 서버의 주소와 포트를 설정하세요
+  baseURL: 'http://localhost:8081'
 });
 
 
@@ -237,15 +238,17 @@ const store = createStore({
             alert(error.response.data.message);
         });
     },
-    duplicateCheck(context) {
-      axiosInstance.get('login/duplicateCheck', {
+    duplicateCheck({ state, commit }) {
+      axiosInstance.get('/login/duplicateCheck', {
         params: {
-          userId: context.state.userId,
+          userId: state.userId,
         }
       })
       .then((response) => {
-        context.commit('setDuplicateToken', response.data.data);
-        if(!this.state.duplicateToken) {
+        const isDuplicate = response.data.data;
+        commit('setDuplicateToken', isDuplicate);
+
+        if (!isDuplicate) {
           alert("아이디가 사용가능합니다.");
         } else {
           alert("아이디가 이미 존재합니다.");
@@ -282,7 +285,7 @@ const store = createStore({
     updateUser(context) {
       const token = localStorage.getItem('token');
       
-      axiosInstance.put('/user/update', {
+      axiosInstance.put('/users', {
         userIndex: context.state.userIndex,
         userId: context.state.userId,
         userPassword: context.state.userPassword,
@@ -303,7 +306,7 @@ const store = createStore({
 
     // novel
     fetchSortingNovels(context) {
-      axiosInstance.get('/novel/get/sorting', {
+      axiosInstance.get('/novels/sorted', {
         params: {
           page: context.state.sortingPageNum,
           size: context.state.sortingSizeNum
@@ -317,7 +320,7 @@ const store = createStore({
         });
     },
     fetchGenreNovels(context) {
-      axiosInstance.get('/novel/get/sorting', {
+      axiosInstance.get('/novels/sorted', {
         params: {
           page: context.state.genreNovelPageNum,
           size: context.state.genreNovelSizeNum
@@ -331,7 +334,7 @@ const store = createStore({
         });
     },
     fetchRankingNovels(context) {
-      axiosInstance.get('/novel/get/ranking', {
+      axiosInstance.get('/novels/ranked', {
         params: {
           page: context.state.rankingPageNum, 
           size: context.state.rankingSizeNum
@@ -345,7 +348,7 @@ const store = createStore({
         });
     },
     fetchRandomNovels(context) {
-      axiosInstance.get('/novel/get/random')
+      axiosInstance.get('/novels/random')
         .then((response) => {
           context.commit('setRandomNovels', response.data.data);
         })
@@ -356,7 +359,7 @@ const store = createStore({
 
     // author
     fetchSortingAuthors(context) {
-      axiosInstance.get('/author/get/sorting', {
+      axiosInstance.get('/authors', {
         params: {
           page: context.state.authorPageNum,
           size: context.state.authorSizeNum
@@ -370,11 +373,7 @@ const store = createStore({
         });
     },
     searchAuthor(context) {
-      axiosInstance.get('/author/find/authorId', {
-        params: {
-          authorId: context.state.authorId
-        }
-      })
+      axiosInstance.get(`/authors/${context.state.authorId}`)
       .then((response) => {
         context.commit('setAuthor', response.data.data);
       })
@@ -393,7 +392,7 @@ const store = createStore({
       });
     },
     fetchSortingGenres(context) {
-      axiosInstance.get('/tag/get/sorting')
+      axiosInstance.get('/tags/sorted')
         .then((response) => {
           context.commit('setSortingGenres', response.data.data);
         })
@@ -402,11 +401,7 @@ const store = createStore({
         });
     },
     searchTag(context) {
-      axiosInstance.get('/tag/find/tagId', {
-        params: {
-          tagId: context.state.tagId
-        }
-      })
+      axiosInstance.get(`/tags/${context.state.tagId}`)
       .then((response) => {
         context.commit('setTag', response.data.data);
       })
@@ -418,33 +413,31 @@ const store = createStore({
     // bookmark
     searchBookMark(context) {
       const token = localStorage.getItem('token');
-
-      return new Promise((resolve, reject) => {
-        axiosInstance.get('/bookmark/find/userIndex', {
-          params: {
-            userIndex: context.state.user.userIndex,
-            page: context.state.bookMarkPageNum,
-            size: context.state.bookMarkSizeNum,
-          },
-          headers: {
-            Authorization: `Bearer ${token}`,
-          }
-        })
-        .then((response) => {
-          context.commit('setBookMarkList', response.data.data);
-          resolve(response);
-        })
-        .catch((error) => {
-          alert(error.response.data.message);
-          reject(error);
-        });
+      const userIndex = context.state.user.userIndex;
+      
+      return axiosInstance.get(`/bookmarks/${userIndex}`, {
+        params: {
+          page: context.state.bookMarkPageNum,
+          size: context.state.bookMarkSizeNum,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        }
+      })
+      .then((response) => {
+        context.commit('setBookMarkList', response.data.data);
+        return response;
+      })
+      .catch((error) => {
+        alert(error.response.data.message);
+        throw error;
       });
     },
     searchNovelsByNovelIdList(context) {
       const token = localStorage.getItem('token');
 
       return new Promise((resolve, reject) => {
-        axiosInstance.get('/novel/find/novelIdList', {
+        axiosInstance.get('/novels', {
           params: {
             novelIdList: context.state.novelIdList.join(','),
           },
@@ -468,7 +461,7 @@ const store = createStore({
       const novelId = context.state.novelId;
 
       return new Promise((resolve, reject) => {
-        axiosInstance.post(`/bookmark/create/userIndex/and/novelId?userIndex=${userIndex}&novelId=${novelId}`, {}, {
+        axiosInstance.post(`/bookmarks?userIndex=${userIndex}&novelId=${novelId}`, {}, {
           headers: {
             Authorization: `Bearer ${token}`,
           }
@@ -487,10 +480,7 @@ const store = createStore({
       const token = localStorage.getItem('token');
 
       return new Promise((resolve, reject) => {
-        axiosInstance.delete('/bookmark/delete/bookMarkId', {
-          params: {
-            bookMarkId: context.state.bookMarkId,
-          },
+        axiosInstance.delete(`/bookmarks/${context.state.bookMarkId}`, {
           headers: {
             Authorization: `Bearer ${token}`,
           }
@@ -508,7 +498,7 @@ const store = createStore({
 
     // search
     searchNovelsInNovelPage(context) {
-      axiosInstance.get('/novel/find/novelName', {
+      axiosInstance.get('/novels/novelName', {
         params: {
           novelName: context.state.novelSearchQuery, // 검색어를 동적으로 설정하거나 사용자 입력 값을 사용하세요
           page: context.state.searchNovelPageNum, // 페이지 번호
@@ -531,7 +521,7 @@ const store = createStore({
         return;
       }
       
-      axiosInstance.get('/novel/find/novelName/and/tagId', {
+      axiosInstance.get('/novels/novelName/and/tagId', {
         params: {
           novelName: context.state.genreSearchQuery,
           tagIdList: selectedGenreIds.join(','),
@@ -549,7 +539,7 @@ const store = createStore({
         });
     },
     searchNovelsByAuthorId(context) {
-      axiosInstance.get('/novel/find/authorId', {
+      axiosInstance.get('/novels/authorId', {
         params: {
           authorId: context.state.author.authorId, // 검색어를 동적으로 설정하거나 사용자 입력 값을 사용하세요
           page: 0, // 페이지 번호
@@ -564,7 +554,7 @@ const store = createStore({
         });
     },
     searchAuthorsInAuthorPage(context) {
-      axiosInstance.get('/author/find/authorName', {
+      axiosInstance.get('/authors/authorName', {
         params: {
           authorName: context.state.authorSearchQuery, // 검색어를 동적으로 설정하거나 사용자 입력 값을 사용하세요
           page: 0, // 페이지 번호
@@ -579,7 +569,7 @@ const store = createStore({
         });
     },
     searchResultNovelsByNovelExplanation(context) {
-      axiosInstance.get('/elastic/find/result', {
+      axiosInstance.get('/elastics', {
         params: {
           novelExplanation: context.state.textArea,
         }
@@ -601,7 +591,7 @@ axiosInstance.interceptors.response.use(undefined, function (error) {
     if (!originalRequest._retry) {
       originalRequest._retry = true;
       const refreshToken = localStorage.getItem('refreshToken');
-      return axiosInstance.get('/token/refresh', {
+      return axiosInstance.get('/tokens/refresh', {
         params: {
           userId: store.state.userId, 
           refreshToken: refreshToken 
